@@ -1,0 +1,257 @@
+:root {
+  --bg: #f4f7f2;
+  --panel: #ffffff;
+  --line: #d7dfd0;
+  --ink: #203229;
+  --subtle: #53645b;
+  --primary: #1f6f54;
+  --primary-strong: #14533e;
+  --accent: #e9f2cc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 20% 0%, #e2ebd8 0%, transparent 45%),
+    linear-gradient(180deg, #f8fbf6 0%, #eef4ea 100%);
+  color: var(--ink);
+  font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+}
+
+.container {
+  width: min(1120px, 92%);
+  margin: 2rem auto;
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: clamp(1.6rem, 2vw, 2rem);
+}
+
+.page-header p {
+  margin: 0.45rem 0 0;
+  color: var(--subtle);
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 1.1rem 1.2rem;
+  margin-top: 1rem;
+  box-shadow: 0 12px 25px -22px rgba(0, 0, 0, 0.55);
+}
+
+.panel h2 {
+  margin-top: 0;
+  margin-bottom: 0.9rem;
+  font-size: 1.2rem;
+}
+
+.add-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(170px, 1fr));
+  gap: 0.65rem;
+}
+
+.filters-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 0.9rem;
+}
+
+.debt-form-row {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr 0.8fr repeat(4, minmax(145px, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 0.75rem;
+}
+
+select,
+input,
+button {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  padding: 0.65rem 0.75rem;
+  font-size: 0.96rem;
+  background: #fff;
+}
+
+.btn {
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--primary-strong);
+}
+
+.btn-secondary {
+  background: var(--accent);
+  color: var(--ink);
+}
+
+.btn-danger {
+  background: #8e1f33;
+  color: #fff;
+}
+
+.btn-danger:hover {
+  background: #73152a;
+}
+
+.metric {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--primary-strong);
+}
+
+.meta {
+  margin: 0.35rem 0 0;
+  color: var(--subtle);
+}
+
+.limits-grid {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.limit-row {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) minmax(110px, 160px) minmax(110px, 160px) 110px;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.limit-card-name {
+  font-weight: 600;
+}
+
+.debts-boards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: 0.8rem;
+}
+
+.debt-card-board {
+  border: 1px solid #dfe7d7;
+  border-radius: 12px;
+  background: #f8fbf5;
+  padding: 0.8rem;
+}
+
+.debt-card-board h3 {
+  margin: 0 0 0.55rem;
+}
+
+.debt-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid #e3ecda;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.debt-item {
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid #edf2e9;
+  cursor: pointer;
+}
+
+.debt-item:last-child {
+  border-bottom: none;
+}
+
+.debt-item.selected {
+  background: #e5f2e7;
+}
+
+.debt-empty {
+  margin: 0;
+  color: var(--subtle);
+}
+
+.debt-total {
+  margin: 0.65rem 0 0;
+  font-weight: 700;
+}
+
+.update-btn {
+  background: #23423b;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 0.6rem 0.7rem;
+  cursor: pointer;
+}
+
+.update-btn:hover {
+  background: #1b312c;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 740px;
+}
+
+th,
+td {
+  padding: 0.72rem;
+  border-bottom: 1px solid #e8ede3;
+  text-align: left;
+}
+
+thead th {
+  background: #eef5e4;
+  color: #213327;
+}
+
+tfoot td {
+  background: #1f6f54;
+  color: #fff;
+  font-weight: 700;
+  border-bottom: none;
+}
+
+@media (max-width: 820px) {
+  .add-form {
+    grid-template-columns: 1fr;
+  }
+
+  .filters-row {
+    grid-template-columns: repeat(2, minmax(130px, 1fr));
+  }
+
+  .debt-form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .limit-row {
+    grid-template-columns: 1fr;
+  }
+
+  .debts-boards {
+    grid-template-columns: 1fr;
+  }
+}
