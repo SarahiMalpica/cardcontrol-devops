@@ -1,0 +1,101 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Infraestructura para CardControl con EC2 y S3
+
+Parameters:
+  KeyName:
+    Type: String
+    Description: Nombre del Key Pair para conectarse a EC2
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+
+Resources:
+  CardControlBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub cardcontrol-logs-${AWS::AccountId}-${AWS::Region}
+
+  CardControlRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CardControlS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt CardControlBucket.Arn
+                  - !Sub ${CardControlBucket.Arn}/*
+
+  CardControlInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref CardControlRole
+
+  CardControlSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security Group para CardControl
+      SecurityGroupIngress:
+        # Para permitir acceso a la aplicación se deben abrir únicamente
+        # los puertos estrictamente necesarios. Ejemplos comunes en este
+        # tipo de proyectos son 3000, 5173 o 8080, dependiendo de cómo
+        # se exponga el frontend. En esta solución se utiliza 8080 para
+        # acceder a la aplicación desde el navegador. El puerto 22 se usa
+        # solo para administración remota. En producción no se recomienda
+        # dejar 0.0.0.0/0 sin restricciones innecesarias.
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+
+  CardControlInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      IamInstanceProfile: !Ref CardControlInstanceProfile
+      SecurityGroupIds:
+        - !Ref CardControlSecurityGroup
+      Tags:
+        - Key: Name
+          Value: CardControl-EC2
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          dnf update -y
+          dnf install git -y
+          dnf install docker -y
+          dnf install awscli -y
+          systemctl enable docker
+          systemctl start docker
+          usermod -aG docker ec2-user
+
+Outputs:
+  BucketName:
+    Value: !Ref CardControlBucket
+
+  InstanceId:
+    Value: !Ref CardControlInstance
+
+  PublicIP:
+    Value: !GetAtt CardControlInstance.PublicIp
