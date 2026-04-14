@@ -16,36 +16,6 @@ Resources:
     Properties:
       BucketName: !Sub cardcontrol-logs-${AWS::AccountId}-${AWS::Region}
 
-  CardControlRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: CardControlS3Access
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:PutObject
-                  - s3:GetObject
-                  - s3:ListBucket
-                Resource:
-                  - !GetAtt CardControlBucket.Arn
-                  - !Sub ${CardControlBucket.Arn}/*
-
-  CardControlInstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      Roles:
-        - !Ref CardControlRole
-
   CardControlSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -73,7 +43,6 @@ Resources:
       ImageId: !Ref LatestAmiId
       InstanceType: t2.micro
       KeyName: !Ref KeyName
-      IamInstanceProfile: !Ref CardControlInstanceProfile
       SecurityGroupIds:
         - !Ref CardControlSecurityGroup
       Tags:
@@ -82,10 +51,10 @@ Resources:
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
-          dnf update -y
-          dnf install git -y
-          dnf install docker -y
-          dnf install awscli -y
+          yum update -y
+          yum install -y git
+          yum install -y docker
+          yum install -y awscli
           systemctl enable docker
           systemctl start docker
           usermod -aG docker ec2-user
