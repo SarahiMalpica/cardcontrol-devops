@@ -1,5 +1,6 @@
 const API_URL = "/api/cards";
 const DEBTS_STORAGE_KEY = "cardcontrol_debts_v1";
+const BALANCES_STORAGE_KEY = "cardcontrol_balances_v1";
 
 const monthNames = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -34,6 +35,7 @@ const totalAvailable = document.getElementById("totalAvailable");
 
 let cardsData = [];
 let debtsData = [];
+let monthlyBalances = {};
 let selectedFilter = null;
 let selectedDebtId = null;
 let editingDebtId = null;
@@ -43,6 +45,10 @@ function money(value) {
     style: "currency",
     currency: "MXN"
   });
+}
+
+function cardLabel(card) {
+  return `${card.cardName}(${card.bank})`;
 }
 
 function loadDebts() {
@@ -60,18 +66,82 @@ function saveDebts() {
   localStorage.setItem(DEBTS_STORAGE_KEY, JSON.stringify(debtsData));
 }
 
+function loadMonthlyBalances() {
+  try {
+    const raw = localStorage.getItem(BALANCES_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    monthlyBalances = parsed && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    console.error("No se pudieron cargar saldos mensuales", error);
+    monthlyBalances = {};
+  }
+}
+
+function saveMonthlyBalances() {
+  localStorage.setItem(BALANCES_STORAGE_KEY, JSON.stringify(monthlyBalances));
+}
+
+function getBalanceKey(cardId, month, year) {
+  return `${cardId}_${year}_${month}`;
+}
+
+function getActiveMonthYear() {
+  if (selectedFilter) {
+    return selectedFilter;
+  }
+
+  const selectedMonth = Number(monthSelect.value);
+  const selectedYear = Number(yearSelect.value);
+
+  if (Number.isInteger(selectedMonth) && Number.isInteger(selectedYear)) {
+    return {
+      month: selectedMonth,
+      year: selectedYear
+    };
+  }
+
+  return {
+    month: new Date().getMonth(),
+    year: new Date().getFullYear()
+  };
+}
+
+function getCardBalanceForMonth(card, month, year) {
+  const key = getBalanceKey(card.id, month, year);
+
+  if (Object.hasOwn(monthlyBalances, key)) {
+    return Number(monthlyBalances[key] || 0);
+  }
+
+  const now = new Date();
+  const isCurrentMonth = month === now.getMonth() && year === now.getFullYear();
+  return isCurrentMonth ? Number(card.initialBalance || 0) : 0;
+}
+
+function setCardBalanceForMonth(cardId, month, year, value) {
+  const key = getBalanceKey(cardId, month, year);
+  monthlyBalances[key] = Number(value || 0);
+  saveMonthlyBalances();
+}
+
+function removeCardMonthlyBalances(cardId) {
+  const prefix = `${cardId}_`;
+  Object.keys(monthlyBalances).forEach((key) => {
+    if (key.startsWith(prefix)) {
+      delete monthlyBalances[key];
+    }
+  });
+  saveMonthlyBalances();
+}
+
 function normalizeCard(card) {
-  const limit = Number(card.noInterestPayment || 0) * 10;
-  const balance = Number(card.balance || 0);
-  const available = limit - balance;
+  const limit = Number(card.balance || 0);
+  const initialBalance = Number(card.noInterestPayment || 0);
 
   return {
     ...card,
     limit,
-    balance,
-    available,
-    month: new Date().getMonth(),
-    year: new Date().getFullYear()
+    initialBalance
   };
 }
 
@@ -87,7 +157,7 @@ function fillMonthYearSelectors() {
   const currentYear = new Date().getFullYear();
   let yearOptions = "";
 
-  for (let year = currentYear - 3; year <= currentYear + 2; year += 1) {
+  for (let year = currentYear; year <= currentYear + 2; year += 1) {
     yearOptions += `<option value="${year}">${year}</option>`;
   }
 
@@ -120,6 +190,12 @@ function getDebtSumForCard(cardId, month, year) {
     .reduce((sum, debt) => sum + Number(debt.amount || 0), 0);
 }
 
+function getCombinedBalanceForMonth(card, month, year) {
+  const baseBalance = getCardBalanceForMonth(card, month, year);
+  const debtBalance = getDebtSumForCard(card.id, month, year);
+  return baseBalance + debtBalance;
+}
+
 function fillDebtCardOptions(cards) {
   if (!cards.length) {
     debtCardSelect.innerHTML = "<option value=\"\">Sin tarjetas</option>";
@@ -127,7 +203,7 @@ function fillDebtCardOptions(cards) {
   }
 
   debtCardSelect.innerHTML = cards
-    .map((card) => `<option value="${card.id}">${card.cardName}</option>`)
+    .map((card) => `<option value="${card.id}">${cardLabel(card)}</option>`)
     .join("");
 }
 
@@ -143,14 +219,18 @@ function renderLimitEditor(cards) {
     return;
   }
 
+  const activeMonthYear = getActiveMonthYear();
+
   limitsContainer.innerHTML = cards
     .map((card) => {
+      const balance = getCombinedBalanceForMonth(card, activeMonthYear.month, activeMonthYear.year);
       return `
         <div class="limit-row" data-id="${card.id}">
-          <span class="limit-card-name">${card.cardName}</span>
+          <span class="limit-card-name">${cardLabel(card)}</span>
           <input type="number" min="0" step="0.01" class="limit-input" value="${card.limit.toFixed(2)}">
-          <input type="number" min="0" step="0.01" class="balance-input" value="${card.balance.toFixed(2)}">
+          <input type="number" min="0" step="0.01" class="balance-input" value="${balance.toFixed(2)}">
           <button class="update-btn" type="button">Actualizar</button>
+          <button class="delete-btn" type="button">Eliminar</button>
         </div>
       `;
     })
@@ -162,21 +242,51 @@ function renderLimitEditor(cards) {
       const id = row.getAttribute("data-id");
       const limitValue = Number(row.querySelector(".limit-input").value);
       const balanceValue = Number(row.querySelector(".balance-input").value);
+      const debtInMonth = getDebtSumForCard(id, activeMonthYear.month, activeMonthYear.year);
 
       cardsData = cardsData.map((card) => {
         if (card.id !== id) return card;
 
-        const updated = {
+        return {
           ...card,
-          limit: Number.isFinite(limitValue) ? limitValue : card.limit,
-          balance: Number.isFinite(balanceValue) ? balanceValue : card.balance
+          limit: Number.isFinite(limitValue) ? limitValue : card.limit
         };
-
-        updated.available = updated.limit - updated.balance;
-        return updated;
       });
 
+      if (Number.isFinite(balanceValue)) {
+        const baseBalance = Math.max(0, balanceValue - debtInMonth);
+        setCardBalanceForMonth(id, activeMonthYear.month, activeMonthYear.year, baseBalance);
+      }
+
       renderAll();
+    });
+  });
+
+  limitsContainer.querySelectorAll(".delete-btn").forEach((button) => {
+    button.addEventListener("click", async (event) => {
+      const row = event.target.closest(".limit-row");
+      const id = row.getAttribute("data-id");
+      const card = cardsData.find((item) => item.id === id);
+      const cardName = card ? cardLabel(card) : "esta tarjeta";
+
+      if (!window.confirm(`¿Seguro que quieres eliminar ${cardName}?`)) {
+        return;
+      }
+
+      try {
+        await deleteCard(id);
+        cardsData = cardsData.filter((item) => item.id !== id);
+        debtsData = debtsData.filter((debt) => debt.cardId !== id);
+        saveDebts();
+        removeCardMonthlyBalances(id);
+        selectedDebtId = null;
+        resetDebtEditor();
+        formMessage.textContent = "Tarjeta eliminada correctamente.";
+        renderAll();
+      } catch (error) {
+        console.error(error);
+        formMessage.textContent = "No se pudo eliminar la tarjeta.";
+      }
     });
   });
 }
@@ -206,7 +316,7 @@ function renderDebtsBoards(cards) {
 
       return `
         <article class="debt-card-board">
-          <h3>${card.cardName}</h3>
+          <h3>${cardLabel(card)}</h3>
           ${listHtml}
           <p class="debt-total">Total deuda: ${money(total)}</p>
         </article>
@@ -230,26 +340,27 @@ function renderSummary(cards) {
   let sumBalance = 0;
   let sumDebt = 0;
   let sumAvailable = 0;
+  const activeMonthYear = getActiveMonthYear();
 
   summaryBody.innerHTML = cards
     .map((card) => {
-      const debtValue = selectedFilter
-        ? getDebtSumForCard(card.id, selectedFilter.month, selectedFilter.year)
-        : getDebtSumForCard(card.id);
+      const balance = getCombinedBalanceForMonth(card, activeMonthYear.month, activeMonthYear.year);
+      const available = card.limit - balance;
+      const debtValue = getDebtSumForCard(card.id, activeMonthYear.month, activeMonthYear.year);
 
-      const status = getStatus(card.available, card.limit);
+      const status = getStatus(available, card.limit);
       sumLimit += card.limit;
-      sumBalance += card.balance;
+      sumBalance += balance;
       sumDebt += debtValue;
-      sumAvailable += card.available;
+      sumAvailable += available;
 
       return `
         <tr>
-          <td>${card.cardName}</td>
+          <td>${cardLabel(card)}</td>
           <td>${money(card.limit)}</td>
-          <td>${money(card.balance)}</td>
+          <td>${money(balance)}</td>
           <td>${money(debtValue)}</td>
-          <td>${money(card.available)}</td>
+          <td>${money(available)}</td>
           <td>${status}</td>
         </tr>
       `;
@@ -263,10 +374,6 @@ function renderSummary(cards) {
   monthlyDebt.textContent = `Total deudas del mes: ${money(sumDebt)}`;
 }
 
-function getVisibleCards() {
-  return cardsData;
-}
-
 function renderFilterLabel() {
   if (!selectedFilter) {
     activeFilter.textContent = "Mes activo: sin filtro";
@@ -277,12 +384,11 @@ function renderFilterLabel() {
 }
 
 function renderAll() {
-  const visibleCards = getVisibleCards();
   renderFilterLabel();
   fillDebtCardOptions(cardsData);
   renderLimitEditor(cardsData);
   renderDebtsBoards(cardsData);
-  renderSummary(visibleCards);
+  renderSummary(cardsData);
 }
 
 async function fetchCards() {
@@ -318,6 +424,16 @@ async function createCard(payload) {
 
   if (!response.ok) {
     throw new Error("No se pudo guardar la tarjeta");
+  }
+}
+
+async function deleteCard(cardId) {
+  const response = await fetch(`${API_URL}/${cardId}`, {
+    method: "DELETE"
+  });
+
+  if (!response.ok) {
+    throw new Error("No se pudo eliminar la tarjeta");
   }
 }
 
@@ -357,6 +473,9 @@ function createDebt() {
   }
 
   saveDebts();
+  selectedFilter = { month, year };
+  monthSelect.value = String(month);
+  yearSelect.value = String(year);
   resetDebtEditor();
   renderAll();
 }
@@ -428,11 +547,7 @@ cardForm.addEventListener("submit", async (event) => {
   const payload = {
     bank: document.getElementById("bank").value.trim(),
     cardName: document.getElementById("cardName").value.trim(),
-    lastDigits: document.getElementById("lastDigits").value.trim(),
-    cutoffDate: Number(document.getElementById("cutoffDate").value),
-    dueDate: Number(document.getElementById("dueDate").value),
     balance: Number(document.getElementById("balance").value),
-    minimumPayment: Number(document.getElementById("minimumPayment").value),
     noInterestPayment: Number(document.getElementById("noInterestPayment").value)
   };
 
@@ -462,4 +577,5 @@ debtsBoards.addEventListener("click", (event) => {
 
 fillMonthYearSelectors();
 loadDebts();
+loadMonthlyBalances();
 fetchCards();

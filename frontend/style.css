@@ -131,7 +131,7 @@ button {
 
 .limit-row {
   display: grid;
-  grid-template-columns: minmax(130px, 1fr) minmax(110px, 160px) minmax(110px, 160px) 110px;
+  grid-template-columns: minmax(130px, 1fr) minmax(110px, 160px) minmax(110px, 160px) 110px 110px;
   gap: 0.6rem;
   align-items: center;
 }
@@ -203,6 +203,19 @@ button {
 
 .update-btn:hover {
   background: #1b312c;
+}
+
+.delete-btn {
+  background: #8e1f33;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 0.6rem 0.7rem;
+  cursor: pointer;
+}
+
+.delete-btn:hover {
+  background: #73152a;
 }
 
 .table-wrap {

@@ -1,6 +1,8 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pymongo import MongoClient
+from bson import ObjectId
+from bson.errors import InvalidId
 import logging
 import os
 
@@ -36,11 +38,7 @@ def get_cards():
                 "id": str(card["_id"]),
                 "bank": card["bank"],
                 "cardName": card["cardName"],
-                "lastDigits": card["lastDigits"],
-                "cutoffDate": card["cutoffDate"],
-                "dueDate": card["dueDate"],
                 "balance": card["balance"],
-                "minimumPayment": card["minimumPayment"],
                 "noInterestPayment": card["noInterestPayment"]
             })
 
@@ -56,8 +54,7 @@ def create_card():
         data = request.get_json()
 
         required_fields = [
-            "bank", "cardName", "lastDigits", "cutoffDate",
-            "dueDate", "balance", "minimumPayment", "noInterestPayment"
+            "bank", "cardName", "balance", "noInterestPayment"
         ]
 
         for field in required_fields:
@@ -68,11 +65,7 @@ def create_card():
         new_card = {
             "bank": data["bank"],
             "cardName": data["cardName"],
-            "lastDigits": data["lastDigits"],
-            "cutoffDate": data["cutoffDate"],
-            "dueDate": data["dueDate"],
             "balance": data["balance"],
-            "minimumPayment": data["minimumPayment"],
             "noInterestPayment": data["noInterestPayment"]
         }
 
@@ -86,6 +79,27 @@ def create_card():
     except Exception as e:
         logging.error(f"Error al registrar tarjeta: {str(e)}")
         return jsonify({"error": "No se pudo guardar la tarjeta"}), 500
+
+@app.route("/api/cards/<card_id>", methods=["DELETE"])
+def delete_card(card_id):
+    try:
+        try:
+            mongo_id = ObjectId(card_id)
+        except InvalidId:
+            logging.warning(f"ID de tarjeta invalido para eliminar: {card_id}")
+            return jsonify({"error": "ID de tarjeta invalido"}), 400
+
+        result = cards_collection.delete_one({"_id": mongo_id})
+
+        if result.deleted_count == 0:
+            logging.warning(f"Tarjeta no encontrada para eliminar: {card_id}")
+            return jsonify({"error": "Tarjeta no encontrada"}), 404
+
+        logging.info(f"Tarjeta eliminada: {card_id}")
+        return jsonify({"message": "Tarjeta eliminada correctamente"}), 200
+    except Exception as e:
+        logging.error(f"Error al eliminar tarjeta {card_id}: {str(e)}")
+        return jsonify({"error": "No se pudo eliminar la tarjeta"}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)

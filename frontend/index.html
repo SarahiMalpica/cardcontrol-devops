@@ -9,8 +9,8 @@
 <body>
   <main class="container">
     <header class="page-header">
-      <h1>Control mensual de tarjetas</h1>
-      <p>Vista general de limites, saldo y deuda mensual</p>
+      <h1>CardControl</h1>
+      <p>Control mensual de tarjetas</p>
     </header>
 
     <section class="panel add-panel">
@@ -18,12 +18,8 @@
       <form id="cardForm" class="add-form">
         <input type="text" id="bank" placeholder="Banco" required>
         <input type="text" id="cardName" placeholder="Nombre de tarjeta" required>
-        <input type="text" id="lastDigits" placeholder="Ultimos 4 digitos" maxlength="4" required>
-        <input type="number" id="cutoffDate" placeholder="Dia de corte" min="1" max="31" required>
-        <input type="number" id="dueDate" placeholder="Dia limite" min="1" max="31" required>
-        <input type="number" id="balance" placeholder="Saldo actual" min="0" step="0.01" required>
-        <input type="number" id="minimumPayment" placeholder="Pago minimo" min="0" step="0.01" required>
-        <input type="number" id="noInterestPayment" placeholder="Pago sin intereses" min="0" step="0.01" required>
+        <input type="number" id="balance" placeholder="Limite" min="0" step="0.01" required>
+        <input type="number" id="noInterestPayment" placeholder="Saldo actual" min="0" step="0.01" required>
         <button class="btn btn-primary" type="submit">Guardar tarjeta</button>
       </form>
       <p id="formMessage" class="meta"></p>
