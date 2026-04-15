@@ -190,9 +190,13 @@ function getDebtSumForCard(cardId, month, year) {
     .reduce((sum, debt) => sum + Number(debt.amount || 0), 0);
 }
 
+function getTotalDebtForCard(cardId) {
+  return getDebtSumForCard(cardId);
+}
+
 function getCombinedBalanceForMonth(card, month, year) {
   const baseBalance = getCardBalanceForMonth(card, month, year);
-  const debtBalance = getDebtSumForCard(card.id, month, year);
+  const debtBalance = getTotalDebtForCard(card.id);
   return baseBalance + debtBalance;
 }
 
@@ -346,7 +350,7 @@ function renderSummary(cards) {
     .map((card) => {
       const balance = getCombinedBalanceForMonth(card, activeMonthYear.month, activeMonthYear.year);
       const available = card.limit - balance;
-      const debtValue = getDebtSumForCard(card.id, activeMonthYear.month, activeMonthYear.year);
+      const debtValue = getTotalDebtForCard(card.id);
 
       const status = getStatus(available, card.limit);
       sumLimit += card.limit;
@@ -371,7 +375,7 @@ function renderSummary(cards) {
   totalBalance.textContent = money(sumBalance);
   totalDebt.textContent = money(sumDebt);
   totalAvailable.textContent = money(sumAvailable);
-  monthlyDebt.textContent = `Total deudas del mes: ${money(sumDebt)}`;
+  monthlyDebt.textContent = `Total deudas registradas: ${money(sumDebt)}`;
 }
 
 function renderFilterLabel() {
