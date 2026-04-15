@@ -10,7 +10,7 @@
   <main class="container">
     <header class="page-header">
       <h1>CardControl</h1>
-      <p>Control de tarjetas</p>
+      <p>Control mensual de tarjetas</p>
     </header>
 
     <section class="panel add-panel">
@@ -19,14 +19,43 @@
         <input type="text" id="bank" placeholder="Banco" required>
         <input type="text" id="cardName" placeholder="Nombre de tarjeta" required>
         <input type="number" id="balance" placeholder="Limite" min="0" step="0.01" required>
+        <input type="number" id="currentBalance" placeholder="Saldo actual" min="0" step="0.01" required>
         <button class="btn btn-primary" type="submit">Guardar tarjeta</button>
       </form>
       <p id="formMessage" class="meta"></p>
     </section>
 
+    <section class="panel filter-panel">
+      <h2>Filtro mensual</h2>
+      <div class="filters-row">
+        <select id="monthSelect"></select>
+        <select id="yearSelect"></select>
+        <button id="applyFilterBtn" class="btn btn-primary" type="button">Aplicar filtro</button>
+        <button id="showAllBtn" class="btn btn-secondary" type="button">Mostrar todo</button>
+      </div>
+      <p id="monthlyDebt" class="metric">Total deudas del mes: $0.00</p>
+      <p id="activeFilter" class="meta">Mes activo: sin filtro</p>
+    </section>
+
     <section class="panel limits-panel">
-      <h2>Tarjetas: limite</h2>
+      <h2>Tarjetas: limite y saldo</h2>
       <div id="limitsContainer" class="limits-grid"></div>
+    </section>
+
+    <section class="panel debts-panel">
+      <h2>Deudas por tarjeta</h2>
+      <div class="debt-form-row">
+        <select id="debtCardSelect"></select>
+        <select id="debtMonthSelect"></select>
+        <input id="debtAmountInput" type="number" min="0.01" step="0.01" placeholder="Monto">
+        <button id="addDebtBtn" class="btn btn-primary" type="button">Agregar deuda</button>
+        <button id="editDebtBtn" class="btn btn-secondary" type="button">Editar seleccionada</button>
+        <button id="cancelEditDebtBtn" class="btn btn-secondary" type="button">Cancelar edicion</button>
+        <button id="deleteDebtBtn" class="btn btn-danger" type="button">Eliminar seleccionada</button>
+      </div>
+      <p class="meta">Selecciona una deuda en los paneles para editarla o eliminarla.</p>
+      <p id="debtFormMessage" class="meta"></p>
+      <div id="debtsBoards" class="debts-boards"></div>
     </section>
 
     <section class="panel table-panel">
@@ -37,6 +66,8 @@
             <tr>
               <th>Tarjeta</th>
               <th>Limite</th>
+              <th>Saldo</th>
+              <th>Deudas</th>
               <th>Disponible</th>
               <th>Estado</th>
             </tr>
@@ -46,6 +77,8 @@
             <tr>
               <td>Total</td>
               <td id="totalLimit">$0.00</td>
+              <td id="totalBalance">$0.00</td>
+              <td id="totalDebt">$0.00</td>
               <td id="totalAvailable">$0.00</td>
               <td>-</td>
             </tr>

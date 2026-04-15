@@ -38,7 +38,8 @@ def get_cards():
                 "id": str(card["_id"]),
                 "bank": card.get("bank", ""),
                 "cardName": card.get("cardName", ""),
-                "balance": card.get("balance", 0)
+                "balance": card.get("balance", 0),
+                "currentBalance": card.get("currentBalance", card.get("noInterestPayment", 0))
             })
 
         logging.info("Consulta de tarjetas realizada")
@@ -53,7 +54,7 @@ def create_card():
         data = request.get_json()
 
         required_fields = [
-            "bank", "cardName", "balance"
+            "bank", "cardName", "balance", "currentBalance"
         ]
 
         for field in required_fields:
@@ -64,7 +65,8 @@ def create_card():
         new_card = {
             "bank": data["bank"],
             "cardName": data["cardName"],
-            "balance": data["balance"]
+            "balance": data["balance"],
+            "currentBalance": data["currentBalance"]
         }
 
         result = cards_collection.insert_one(new_card)
@@ -96,6 +98,8 @@ def update_card(card_id):
             update_fields["cardName"] = data["cardName"]
         if "balance" in data:
             update_fields["balance"] = data["balance"]
+        if "currentBalance" in data:
+            update_fields["currentBalance"] = data["currentBalance"]
 
         if not update_fields:
             return jsonify({"error": "No hay campos para actualizar"}), 400
