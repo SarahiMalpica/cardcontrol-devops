@@ -136,7 +136,7 @@ function removeCardMonthlyBalances(cardId) {
 
 function normalizeCard(card) {
   const limit = Number(card.balance || 0);
-  const initialBalance = Number(card.noInterestPayment || 0);
+  const initialBalance = 0;
 
   return {
     ...card,
@@ -551,8 +551,7 @@ cardForm.addEventListener("submit", async (event) => {
   const payload = {
     bank: document.getElementById("bank").value.trim(),
     cardName: document.getElementById("cardName").value.trim(),
-    balance: Number(document.getElementById("balance").value),
-    noInterestPayment: Number(document.getElementById("noInterestPayment").value)
+    balance: Number(document.getElementById("balance").value)
   };
 
   try {

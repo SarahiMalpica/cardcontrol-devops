@@ -36,10 +36,9 @@ def get_cards():
         for card in cards_collection.find():
             cards.append({
                 "id": str(card["_id"]),
-                "bank": card["bank"],
-                "cardName": card["cardName"],
-                "balance": card["balance"],
-                "noInterestPayment": card["noInterestPayment"]
+                "bank": card.get("bank", ""),
+                "cardName": card.get("cardName", ""),
+                "balance": card.get("balance", 0)
             })
 
         logging.info("Consulta de tarjetas realizada")
@@ -54,7 +53,7 @@ def create_card():
         data = request.get_json()
 
         required_fields = [
-            "bank", "cardName", "balance", "noInterestPayment"
+            "bank", "cardName", "balance"
         ]
 
         for field in required_fields:
@@ -65,8 +64,7 @@ def create_card():
         new_card = {
             "bank": data["bank"],
             "cardName": data["cardName"],
-            "balance": data["balance"],
-            "noInterestPayment": data["noInterestPayment"]
+            "balance": data["balance"]
         }
 
         result = cards_collection.insert_one(new_card)
