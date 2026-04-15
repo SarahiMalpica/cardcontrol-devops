@@ -1,5 +1,5 @@
 const API_URL = "/api/cards";
-const DEBTS_STORAGE_KEY = "cardcontrol_debts_v1";
+const DEBTS_API_URL = "/api/debts";
 const BALANCES_STORAGE_KEY = "cardcontrol_balances_v1";
 
 const monthNames = [
@@ -49,21 +49,6 @@ function money(value) {
 
 function cardLabel(card) {
   return `${card.cardName}(${card.bank})`;
-}
-
-function loadDebts() {
-  try {
-    const raw = localStorage.getItem(DEBTS_STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    debtsData = Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.error("No se pudieron cargar deudas locales", error);
-    debtsData = [];
-  }
-}
-
-function saveDebts() {
-  localStorage.setItem(DEBTS_STORAGE_KEY, JSON.stringify(debtsData));
 }
 
 function loadMonthlyBalances() {
@@ -200,6 +185,15 @@ function getCombinedBalanceForMonth(card, month, year) {
   return baseBalance + debtBalance;
 }
 
+function normalizeDebt(debt) {
+  return {
+    ...debt,
+    month: Number(debt.month || 0),
+    year: Number(debt.year || 0),
+    amount: Number(debt.amount || 0)
+  };
+}
+
 function fillDebtCardOptions(cards) {
   if (!cards.length) {
     debtCardSelect.innerHTML = "<option value=\"\">Sin tarjetas</option>";
@@ -246,7 +240,7 @@ function renderLimitEditor(cards) {
       const id = row.getAttribute("data-id");
       const limitValue = Number(row.querySelector(".limit-input").value);
       const balanceValue = Number(row.querySelector(".balance-input").value);
-      const debtInMonth = getDebtSumForCard(id, activeMonthYear.month, activeMonthYear.year);
+      const debtTotal = getTotalDebtForCard(id);
 
       cardsData = cardsData.map((card) => {
         if (card.id !== id) return card;
@@ -258,7 +252,7 @@ function renderLimitEditor(cards) {
       });
 
       if (Number.isFinite(balanceValue)) {
-        const baseBalance = Math.max(0, balanceValue - debtInMonth);
+        const baseBalance = Math.max(0, balanceValue - debtTotal);
         setCardBalanceForMonth(id, activeMonthYear.month, activeMonthYear.year, baseBalance);
       }
 
@@ -281,7 +275,6 @@ function renderLimitEditor(cards) {
         await deleteCard(id);
         cardsData = cardsData.filter((item) => item.id !== id);
         debtsData = debtsData.filter((debt) => debt.cardId !== id);
-        saveDebts();
         removeCardMonthlyBalances(id);
         selectedDebtId = null;
         resetDebtEditor();
@@ -419,6 +412,25 @@ async function fetchCards() {
   }
 }
 
+async function fetchDebts() {
+  try {
+    const response = await fetch(DEBTS_API_URL);
+
+    if (!response.ok) {
+      throw new Error("No se pudieron obtener las deudas");
+    }
+
+    const rawDebts = await response.json();
+    debtsData = rawDebts.map(normalizeDebt);
+    renderAll();
+  } catch (error) {
+    console.error(error);
+    debtFormMessage.textContent = "No se pudieron cargar las deudas.";
+    debtsData = [];
+    renderAll();
+  }
+}
+
 async function createCard(payload) {
   const response = await fetch(API_URL, {
     method: "POST",
@@ -441,7 +453,41 @@ async function deleteCard(cardId) {
   }
 }
 
-function createDebt() {
+async function createDebtRequest(payload) {
+  const response = await fetch(DEBTS_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error("No se pudo guardar la deuda");
+  }
+}
+
+async function updateDebtRequest(debtId, payload) {
+  const response = await fetch(`${DEBTS_API_URL}/${debtId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error("No se pudo actualizar la deuda");
+  }
+}
+
+async function deleteDebtRequest(debtId) {
+  const response = await fetch(`${DEBTS_API_URL}/${debtId}`, {
+    method: "DELETE"
+  });
+
+  if (!response.ok) {
+    throw new Error("No se pudo eliminar la deuda");
+  }
+}
+
+async function createDebt() {
   if (!cardsData.length) {
     debtFormMessage.textContent = "Primero agrega al menos una tarjeta.";
     return;
@@ -457,31 +503,29 @@ function createDebt() {
     return;
   }
 
-  if (editingDebtId) {
-    debtsData = debtsData.map((debt) => {
-      if (debt.id !== editingDebtId) return debt;
-      return { ...debt, cardId, month, year, amount };
-    });
+  const payload = { cardId, month, year, amount };
 
-    debtFormMessage.textContent = "Deuda actualizada.";
-  } else {
-    debtsData.push({
-      id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      cardId,
-      month,
-      year,
-      amount
-    });
-
-    debtFormMessage.textContent = "Deuda agregada.";
+  try {
+    if (editingDebtId) {
+      await updateDebtRequest(editingDebtId, payload);
+      debtFormMessage.textContent = "Deuda actualizada.";
+    } else {
+      await createDebtRequest(payload);
+      debtFormMessage.textContent = "Deuda agregada.";
+    }
+  } catch (error) {
+    console.error(error);
+    debtFormMessage.textContent = editingDebtId
+      ? "No se pudo actualizar la deuda."
+      : "No se pudo guardar la deuda.";
+    return;
   }
 
-  saveDebts();
   selectedFilter = { month, year };
   monthSelect.value = String(month);
   yearSelect.value = String(year);
   resetDebtEditor();
-  renderAll();
+  await fetchDebts();
 }
 
 function prepareEditDebt() {
@@ -511,23 +555,28 @@ function cancelDebtEdit() {
   debtFormMessage.textContent = "Edicion cancelada.";
 }
 
-function deleteSelectedDebt() {
+async function deleteSelectedDebt() {
   if (!selectedDebtId) {
     debtFormMessage.textContent = "Selecciona una deuda para eliminar.";
     return;
   }
 
-  debtsData = debtsData.filter((item) => item.id !== selectedDebtId);
-  selectedDebtId = null;
+  try {
+    await deleteDebtRequest(selectedDebtId);
+    selectedDebtId = null;
 
-  if (editingDebtId) {
-    editingDebtId = null;
-    addDebtBtn.textContent = "Agregar deuda";
+    if (editingDebtId) {
+      editingDebtId = null;
+      addDebtBtn.textContent = "Agregar deuda";
+    }
+  } catch (error) {
+    console.error(error);
+    debtFormMessage.textContent = "No se pudo eliminar la deuda.";
+    return;
   }
 
-  saveDebts();
   debtFormMessage.textContent = "Deuda eliminada.";
-  renderAll();
+  await fetchDebts();
 }
 
 applyFilterBtn.addEventListener("click", () => {
@@ -579,6 +628,6 @@ debtsBoards.addEventListener("click", (event) => {
 });
 
 fillMonthYearSelectors();
-loadDebts();
 loadMonthlyBalances();
 fetchCards();
+fetchDebts();

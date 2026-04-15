@@ -13,6 +13,7 @@ MONGO_URI = os.getenv("MONGO_URI", "mongodb://mongo:27017/")
 client = MongoClient(MONGO_URI)
 db = client["cardcontrol_db"]
 cards_collection = db["cards"]
+debts_collection = db["debts"]
 
 LOG_DIR = "/app/logs"
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -93,11 +94,113 @@ def delete_card(card_id):
             logging.warning(f"Tarjeta no encontrada para eliminar: {card_id}")
             return jsonify({"error": "Tarjeta no encontrada"}), 404
 
+        debts_collection.delete_many({"cardId": card_id})
         logging.info(f"Tarjeta eliminada: {card_id}")
         return jsonify({"message": "Tarjeta eliminada correctamente"}), 200
     except Exception as e:
         logging.error(f"Error al eliminar tarjeta {card_id}: {str(e)}")
         return jsonify({"error": "No se pudo eliminar la tarjeta"}), 500
+
+@app.route("/api/debts", methods=["GET"])
+def get_debts():
+    try:
+        debts = []
+        for debt in debts_collection.find():
+            debts.append({
+                "id": str(debt["_id"]),
+                "cardId": debt.get("cardId", ""),
+                "month": int(debt.get("month", 0)),
+                "year": int(debt.get("year", 0)),
+                "amount": float(debt.get("amount", 0))
+            })
+
+        logging.info("Consulta de deudas realizada")
+        return jsonify(debts), 200
+    except Exception as e:
+        logging.error(f"Error al consultar deudas: {str(e)}")
+        return jsonify({"error": "No se pudieron obtener las deudas"}), 500
+
+@app.route("/api/debts", methods=["POST"])
+def create_debt():
+    try:
+        data = request.get_json()
+        required_fields = ["cardId", "month", "year", "amount"]
+
+        for field in required_fields:
+            if field not in data:
+                logging.warning(f"Falta el campo requerido en deuda: {field}")
+                return jsonify({"error": f"Falta el campo: {field}"}), 400
+
+        new_debt = {
+            "cardId": str(data["cardId"]),
+            "month": int(data["month"]),
+            "year": int(data["year"]),
+            "amount": float(data["amount"])
+        }
+
+        result = debts_collection.insert_one(new_debt)
+        logging.info(f"Deuda registrada para tarjeta: {new_debt['cardId']}")
+
+        return jsonify({
+            "message": "Deuda guardada correctamente",
+            "id": str(result.inserted_id)
+        }), 201
+    except Exception as e:
+        logging.error(f"Error al registrar deuda: {str(e)}")
+        return jsonify({"error": "No se pudo guardar la deuda"}), 500
+
+@app.route("/api/debts/<debt_id>", methods=["PUT"])
+def update_debt(debt_id):
+    try:
+        try:
+            mongo_id = ObjectId(debt_id)
+        except InvalidId:
+            logging.warning(f"ID de deuda invalido para actualizar: {debt_id}")
+            return jsonify({"error": "ID de deuda invalido"}), 400
+
+        data = request.get_json()
+        update_fields = {
+            "cardId": str(data.get("cardId", "")),
+            "month": int(data.get("month", 0)),
+            "year": int(data.get("year", 0)),
+            "amount": float(data.get("amount", 0))
+        }
+
+        result = debts_collection.update_one(
+            {"_id": mongo_id},
+            {"$set": update_fields}
+        )
+
+        if result.matched_count == 0:
+            logging.warning(f"Deuda no encontrada para actualizar: {debt_id}")
+            return jsonify({"error": "Deuda no encontrada"}), 404
+
+        logging.info(f"Deuda actualizada: {debt_id}")
+        return jsonify({"message": "Deuda actualizada correctamente"}), 200
+    except Exception as e:
+        logging.error(f"Error al actualizar deuda {debt_id}: {str(e)}")
+        return jsonify({"error": "No se pudo actualizar la deuda"}), 500
+
+@app.route("/api/debts/<debt_id>", methods=["DELETE"])
+def delete_debt(debt_id):
+    try:
+        try:
+            mongo_id = ObjectId(debt_id)
+        except InvalidId:
+            logging.warning(f"ID de deuda invalido para eliminar: {debt_id}")
+            return jsonify({"error": "ID de deuda invalido"}), 400
+
+        result = debts_collection.delete_one({"_id": mongo_id})
+
+        if result.deleted_count == 0:
+            logging.warning(f"Deuda no encontrada para eliminar: {debt_id}")
+            return jsonify({"error": "Deuda no encontrada"}), 404
+
+        logging.info(f"Deuda eliminada: {debt_id}")
+        return jsonify({"message": "Deuda eliminada correctamente"}), 200
+    except Exception as e:
+        logging.error(f"Error al eliminar deuda {debt_id}: {str(e)}")
+        return jsonify({"error": "No se pudo eliminar la deuda"}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
