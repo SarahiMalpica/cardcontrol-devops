@@ -278,7 +278,7 @@ function renderSummary(cards) {
   summaryBody.innerHTML = cards
     .map((card) => {
       const balance = getCombinedBalance(card);
-      const debtValue = getTotalDebtForCard(card.id);
+      const debtValue = getDebtSumForCard(card.id, activeMonthYear.month, activeMonthYear.year);
       const available = card.limit - balance;
       const status = getStatus(available, card.limit);
 
