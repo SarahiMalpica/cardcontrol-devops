@@ -1,5 +1,5 @@
 const API_URL = "/api/cards";
-const DEBTS_STORAGE_KEY = "cardcontrol_debts_v1";
+const DEBTS_API_URL = "/api/debts";
 
 const monthNames = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -49,21 +49,6 @@ function cardLabel(card) {
   return `${card.cardName}(${card.bank})`;
 }
 
-function loadDebts() {
-  try {
-    const raw = localStorage.getItem(DEBTS_STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    debtsData = Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.error("No se pudieron cargar deudas locales", error);
-    debtsData = [];
-  }
-}
-
-function saveDebts() {
-  localStorage.setItem(DEBTS_STORAGE_KEY, JSON.stringify(debtsData));
-}
-
 function getActiveMonthYear() {
   if (selectedFilter) return selectedFilter;
 
@@ -78,6 +63,15 @@ function normalizeCard(card) {
     ...card,
     limit: Number(card.balance || 0),
     currentBalance: Number(card.currentBalance || 0)
+  };
+}
+
+function normalizeDebt(debt) {
+  return {
+    ...debt,
+    month: Number(debt.month || 0),
+    year: Number(debt.year || 0),
+    amount: Number(debt.amount || 0)
   };
 }
 
@@ -210,13 +204,10 @@ function renderLimitEditor(cards) {
 
       try {
         await deleteCard(id);
-        cardsData = cardsData.filter((item) => item.id !== id);
-        debtsData = debtsData.filter((debt) => debt.cardId !== id);
-        saveDebts();
         selectedDebtId = null;
         resetDebtEditor();
         formMessage.textContent = "Tarjeta eliminada correctamente.";
-        renderAll();
+        await fetchAllData();
       } catch (error) {
         console.error(error);
         formMessage.textContent = "No se pudo eliminar la tarjeta.";
@@ -330,15 +321,28 @@ function renderAll() {
 }
 
 async function fetchCards() {
+  const response = await fetch(API_URL);
+  if (!response.ok) {
+    throw new Error("No se pudieron obtener las tarjetas");
+  }
+
+  const rawCards = await response.json();
+  cardsData = rawCards.map(normalizeCard);
+}
+
+async function fetchDebts() {
+  const response = await fetch(DEBTS_API_URL);
+  if (!response.ok) {
+    throw new Error("No se pudieron obtener las deudas");
+  }
+
+  const rawDebts = await response.json();
+  debtsData = Array.isArray(rawDebts) ? rawDebts.map(normalizeDebt) : [];
+}
+
+async function fetchAllData() {
   try {
-    const response = await fetch(API_URL);
-
-    if (!response.ok) {
-      throw new Error("No se pudieron obtener las tarjetas");
-    }
-
-    const rawCards = await response.json();
-    cardsData = rawCards.map(normalizeCard);
+    await Promise.all([fetchCards(), fetchDebts()]);
 
     if (cardsData.length && !cardsData.some((card) => card.id === debtCardSelect.value)) {
       debtCardSelect.value = cardsData[0].id;
@@ -347,9 +351,9 @@ async function fetchCards() {
     renderAll();
   } catch (error) {
     console.error(error);
-    limitsContainer.innerHTML = "<p>Error al cargar tarjetas.</p>";
-    summaryBody.innerHTML = "<tr><td colspan=\"6\">Error al cargar tarjetas.</td></tr>";
-    debtsBoards.innerHTML = "<p>Error al cargar tarjetas.</p>";
+    limitsContainer.innerHTML = "<p>Error al cargar datos.</p>";
+    summaryBody.innerHTML = "<tr><td colspan=\"6\">Error al cargar datos.</td></tr>";
+    debtsBoards.innerHTML = "<p>Error al cargar datos.</p>";
   }
 }
 
@@ -387,7 +391,41 @@ async function deleteCard(cardId) {
   }
 }
 
-function createDebt() {
+async function createDebtRequest(payload) {
+  const response = await fetch(DEBTS_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error("No se pudo guardar la deuda");
+  }
+}
+
+async function updateDebtRequest(debtId, payload) {
+  const response = await fetch(`${DEBTS_API_URL}/${debtId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error("No se pudo actualizar la deuda");
+  }
+}
+
+async function deleteDebtRequest(debtId) {
+  const response = await fetch(`${DEBTS_API_URL}/${debtId}`, {
+    method: "DELETE"
+  });
+
+  if (!response.ok) {
+    throw new Error("No se pudo eliminar la deuda");
+  }
+}
+
+async function createDebt() {
   if (!cardsData.length) {
     debtFormMessage.textContent = "Primero agrega al menos una tarjeta.";
     return;
@@ -403,24 +441,22 @@ function createDebt() {
     return;
   }
 
-  if (editingDebtId) {
-    debtsData = debtsData.map((debt) => {
-      if (debt.id !== editingDebtId) return debt;
-      return { ...debt, cardId, month, year, amount };
-    });
-    debtFormMessage.textContent = "Deuda actualizada.";
-  } else {
-    debtsData.push({
-      id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      cardId,
-      month,
-      year,
-      amount
-    });
-    debtFormMessage.textContent = "Deuda agregada.";
+  try {
+    if (editingDebtId) {
+      await updateDebtRequest(editingDebtId, { cardId, month, year, amount });
+      debtFormMessage.textContent = "Deuda actualizada.";
+    } else {
+      await createDebtRequest({ cardId, month, year, amount });
+      debtFormMessage.textContent = "Deuda agregada.";
+    }
+
+    await fetchDebts();
+  } catch (error) {
+    console.error(error);
+    debtFormMessage.textContent = "No se pudo guardar la deuda.";
+    return;
   }
 
-  saveDebts();
   selectedFilter = { month, year };
   monthSelect.value = String(month);
   yearSelect.value = String(year);
@@ -454,23 +490,28 @@ function cancelDebtEdit() {
   debtFormMessage.textContent = "Edicion cancelada.";
 }
 
-function deleteSelectedDebt() {
+async function deleteSelectedDebt() {
   if (!selectedDebtId) {
     debtFormMessage.textContent = "Selecciona una deuda para eliminar.";
     return;
   }
 
-  debtsData = debtsData.filter((item) => item.id !== selectedDebtId);
-  selectedDebtId = null;
+  try {
+    await deleteDebtRequest(selectedDebtId);
+    selectedDebtId = null;
 
-  if (editingDebtId) {
-    editingDebtId = null;
-    addDebtBtn.textContent = "Agregar deuda";
+    if (editingDebtId) {
+      editingDebtId = null;
+      addDebtBtn.textContent = "Agregar deuda";
+    }
+
+    await fetchDebts();
+    debtFormMessage.textContent = "Deuda eliminada.";
+    renderAll();
+  } catch (error) {
+    console.error(error);
+    debtFormMessage.textContent = "No se pudo eliminar la deuda.";
   }
-
-  saveDebts();
-  debtFormMessage.textContent = "Deuda eliminada.";
-  renderAll();
 }
 
 applyFilterBtn.addEventListener("click", () => {
@@ -501,7 +542,7 @@ cardForm.addEventListener("submit", async (event) => {
     await createCard(payload);
     cardForm.reset();
     formMessage.textContent = "Tarjeta guardada correctamente.";
-    await fetchCards();
+    await fetchAllData();
   } catch (error) {
     console.error(error);
     formMessage.textContent = "No se pudo guardar la tarjeta.";
@@ -521,5 +562,4 @@ debtsBoards.addEventListener("click", (event) => {
 });
 
 fillMonthYearSelectors();
-loadDebts();
-fetchCards();
+fetchAllData();
